@@ -27,7 +27,7 @@ private:
 	QPoint moveStart = QPoint(0, 0);
 	QVector<QPoint> originalPointsVector;
 
-	std::vector<std::pair<Shape, int>> zBuffer;
+	std::vector<std::pair<std::reference_wrapper<Shape>, int>> zBuffer;
 	int currentLayer;
 	QColor borderColor, fillingColor;
 
@@ -50,14 +50,14 @@ public:
 	bool isInside(int x, int y) { return (x > 0 && y > 0 && x < img->width() && y < img->height()) ? true : false; }
 
 	//Draw functions
-	void drawShape(const Shape& shape);
+	void drawShape(Shape& shape);
 	void moveShapeUp(int zBufferPosition);
 	void moveShapeDown(int zBufferPosition);
-	void addToZBuffer(const Shape& shape, int depth);
+	void addToZBuffer(Shape& shape, int depth);
 	void redrawAllShapes();
 
 	//	Lines
-	void drawLine(const Line& line);
+	void drawLine(Line& line);
 	void setDrawLineBegin(QPoint begin) { drawLineBegin = begin; }
 	QPoint getDrawLineBegin() { return drawLineBegin; }
 	void setDrawLineActivated(bool state) { drawLineActivated = state; }
@@ -69,7 +69,7 @@ public:
 	void scaleLine(double scaleX, double scaleY);
 	
 	//	Circles
-	void drawCircle(const Circle& circle);
+	void drawCircle(Circle& circle);
 	void drawSymmetricPoints(const QPoint& center, int x, int y);
 	void drawSymmetricPointsFilled(const QPoint& center, int x, int y);
 	void setDrawCircleActivated(bool state) { drawCircleActivated = state; }
@@ -80,7 +80,7 @@ public:
 	void scaleCircle(double scaleX, double scaleY);
 
 	// Polygons
-	void drawPolygon(const MyPolygon& polygon);
+	void drawPolygon(MyPolygon& polygon);
 	void setMoveStart(QPoint start) { moveStart = start; };
 	QPoint getMoveStart() { return moveStart; }
 	void movePolygon(const QPoint& offset);
@@ -161,8 +161,7 @@ public:
 	QVector<Edge> loadEdges(const QVector<QPoint>& points);
 
 	//	** Curve function declarations **
-	void drawCurve(const BezierCurve& curve);
-
+	void drawCurve(BezierCurve& curve);
 	void moveCurve(const QPoint& offset);
 	void scaleCurve(double scaleX, double scaleY);
 	void turnCurve(int angle);

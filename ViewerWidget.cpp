@@ -143,29 +143,29 @@ void ViewerWidget::setPixel(int x, int y, const QColor& color)
 //-----------------------------------------
 //		*** Drawing functions ***
 //-----------------------------------------
-void ViewerWidget::drawShape(const Shape& shape) {
+void ViewerWidget::drawShape(Shape& shape) {
 	switch (shape.getType()) {
 	case Shape::LINE: {
-		const Line& line = static_cast<const Line&>(shape);
+		Line& line = static_cast<Line&>(shape);
 		drawLine(line);
 		break;
 	}
 	case Shape::RECTANGLE: {
-		const MyRectangle& rectangle = static_cast<const MyRectangle&>(shape);
+		MyRectangle& rectangle = static_cast<MyRectangle&>(shape);
 		break;
 	}
 	case Shape::POLYGON: {
-		const MyPolygon& polygon = static_cast<const MyPolygon&>(shape);
+		MyPolygon& polygon = static_cast<MyPolygon&>(shape);
 		drawPolygon(polygon);
 		break;
 	}
 	case Shape::CIRCLE: {
-		const Circle& circle = static_cast<const Circle&>(shape);
+		Circle& circle = static_cast<Circle&>(shape);
 		drawCircle(circle);
 		break;
 	}
 	case Shape::BEZIER_CURVE: {
-		const BezierCurve& curve = static_cast<const BezierCurve&>(shape);
+		BezierCurve& curve = static_cast<BezierCurve&>(shape);
 		drawCurve(curve);
 		break;
 	}
@@ -174,10 +174,9 @@ void ViewerWidget::drawShape(const Shape& shape) {
 	}
 }
 
-void ViewerWidget::addToZBuffer(const Shape& shape, int depth) {
-	zBuffer.push_back(std::make_pair(shape, depth));
-
-	std::sort(zBuffer.begin(), zBuffer.end(), [](const std::pair<Shape, int>& a, const std::pair<Shape, int>& b) {
+void ViewerWidget::addToZBuffer(Shape& shape, int depth) {
+	zBuffer.push_back(std::make_pair(std::ref(shape), depth));
+	std::sort(zBuffer.begin(), zBuffer.end(), [](const std::pair<std::reference_wrapper<Shape>, int>& a, const std::pair<std::reference_wrapper<Shape>, int>& b) {
 		return a.second < b.second;
 		});
 }
@@ -211,7 +210,7 @@ void ViewerWidget::moveShapeDown(int zBufferPosition) {
 void ViewerWidget::redrawAllShapes() {
 	clear();
 	for (const auto& shapePair : zBuffer) {
-		drawShape(shapePair.first);
+		drawShape(shapePair.first.get());
 	}
 	update();
 }
@@ -219,7 +218,7 @@ void ViewerWidget::redrawAllShapes() {
 //-----------------------------------------
 //		*** Line functions ***
 //-----------------------------------------
-void ViewerWidget::drawLine(const Line& line)
+void ViewerWidget::drawLine(Line& line)
 {
 	painter->setPen(QPen(borderColor));
 
@@ -358,8 +357,8 @@ void ViewerWidget::drawLineBresenham(QVector<QPoint>& linePoints) {
 void ViewerWidget::moveLine(const QPoint& offset) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
-		if (pair.first.getType() == Shape::LINE) {
-			Line line = static_cast<Line&>(pair.first);
+		if (pair.first.get().getType() == Shape::LINE) {
+			Line& line = static_cast<Line&>(pair.first.get());
 			QVector<QPoint> points = line.getPoints();
 
 			for (QPoint& point : points) {
@@ -367,7 +366,7 @@ void ViewerWidget::moveLine(const QPoint& offset) {
 			}
 
 			Line movedLine(points[0], points[1], line.getZBufferPosition(), line.getIsFilled());
-			pair.first = movedLine;
+			pair.first = std::ref(movedLine);
 
 			redrawAllShapes();
 		}
@@ -377,8 +376,8 @@ void ViewerWidget::moveLine(const QPoint& offset) {
 void ViewerWidget::turnLine(int angle) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
-		if (pair.first.getType() == Shape::LINE) {
-			Line line = static_cast<Line&>(pair.first);
+		if (pair.first.get().getType() == Shape::LINE) {
+			Line& line = static_cast<Line&>(pair.first.get());
 			QVector<QPoint> points = line.getPoints();
 			QPoint center = getLineCenter(line);
 
@@ -402,7 +401,7 @@ void ViewerWidget::turnLine(int angle) {
 			}
 
 			Line rotatedLine(rotatedPoints[0], rotatedPoints[1], line.getZBufferPosition(), line.getIsFilled());
-			pair.first = rotatedLine;
+			pair.first = std::ref(rotatedLine);
 
 			redrawAllShapes();
 		}
@@ -424,8 +423,8 @@ QPoint ViewerWidget::getLineCenter(const Line& line) const {
 void ViewerWidget::scaleLine(double scaleX, double scaleY) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
-		if (pair.first.getType() == Shape::LINE) {
-			Line line = static_cast<Line&>(pair.first);
+		if (pair.first.get().getType() == Shape::LINE) {
+			Line& line = static_cast<Line&>(pair.first.get());
 			QVector<QPoint> points = line.getPoints();
 			QPoint center = getLineCenter(line);
 
@@ -439,7 +438,7 @@ void ViewerWidget::scaleLine(double scaleX, double scaleY) {
 			}
 
 			Line scaledLine(scaledPoints[0], scaledPoints[1], line.getZBufferPosition(), line.getIsFilled());
-			pair.first = scaledLine;
+			pair.first = std::ref(scaledLine);
 
 			redrawAllShapes();
 		}
@@ -449,7 +448,7 @@ void ViewerWidget::scaleLine(double scaleX, double scaleY) {
 //-----------------------------------------
 //		*** Circle functions ***
 //-----------------------------------------
-void ViewerWidget::drawCircle(const Circle& circle) {
+void ViewerWidget::drawCircle(Circle& circle) {
 	QPoint center = circle.getPoints()[0];
 	QPoint radiusPoint = circle.getPoints()[1];
 	int r = std::sqrt(std::pow(radiusPoint.x() - center.x(), 2) + std::pow(radiusPoint.y() - center.y(), 2));
@@ -544,8 +543,8 @@ void ViewerWidget::drawSymmetricPointsFilled(const QPoint& center, int x, int y)
 void ViewerWidget::moveCircle(const QPoint& offset) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
-		if (pair.first.getType() == Shape::CIRCLE) {
-			Circle circle = static_cast<Circle&>(pair.first);
+		if (pair.first.get().getType() == Shape::CIRCLE) {
+			Circle& circle = static_cast<Circle&>(pair.first.get());
 			QVector<QPoint> points = circle.getPoints();
 
 			for (QPoint& point : points) {
@@ -553,7 +552,7 @@ void ViewerWidget::moveCircle(const QPoint& offset) {
 			}
 
 			Circle movedCircle(points[0], points[1], circle.getZBufferPosition(), circle.getIsFilled());
-			pair.first = movedCircle;
+			pair.first = std::ref(movedCircle);
 
 			redrawAllShapes();
 		}
@@ -563,8 +562,8 @@ void ViewerWidget::moveCircle(const QPoint& offset) {
 void ViewerWidget::scaleCircle(double scaleX, double scaleY) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
-		if (pair.first.getType() == Shape::CIRCLE) {
-			Circle circle = static_cast<Circle&>(pair.first);
+		if (pair.first.get().getType() == Shape::CIRCLE) {
+			Circle& circle = static_cast<Circle&>(pair.first.get());
 			QVector<QPoint> points = circle.getPoints();
 			QPoint center = points[0];
 			QPoint radiusPoint = points[1];
@@ -574,7 +573,7 @@ void ViewerWidget::scaleCircle(double scaleX, double scaleY) {
 			points[1] = QPoint(newX, newY);
 
 			Circle scaledCircle(points[0], points[1], circle.getZBufferPosition(), circle.getIsFilled());
-			pair.first = scaledCircle;
+			pair.first = std::ref(scaledCircle);
 
 			redrawAllShapes();
 		}
@@ -585,7 +584,7 @@ void ViewerWidget::scaleCircle(double scaleX, double scaleY) {
 //-----------------------------------------
 //		*** Polygon Functions ***
 //-----------------------------------------
-void ViewerWidget::drawPolygon(const MyPolygon& polygon) {
+void ViewerWidget::drawPolygon(MyPolygon& polygon) {
 	const QVector<QPoint>& pointsVector = polygon.getPoints();
 
 	if (pointsVector.size() < 2) {
@@ -618,11 +617,17 @@ void ViewerWidget::drawPolygon(const MyPolygon& polygon) {
 		fillPolygon(polygon);
 	}
 	painter->setPen(QPen(borderColor));
+
+	std::vector<Line> lines;
 	if (!polygonPoints.isEmpty()) {
 		for (int i = 0; i < polygonPoints.size() - 1; i++) {
-			drawLine(Line(polygonPoints.at(i), polygonPoints.at(i + 1), polygon.getZBufferPosition(), polygon.getIsFilled()));
+			lines.emplace_back(polygonPoints.at(i), polygonPoints.at(i + 1), polygon.getZBufferPosition(), polygon.getIsFilled());
 		}
-		drawLine(Line(polygonPoints.last(), polygonPoints.first(), polygon.getZBufferPosition(), polygon.getIsFilled()));
+		lines.emplace_back(polygonPoints.last(), polygonPoints.first(), polygon.getZBufferPosition(), polygon.getIsFilled());
+	}
+
+	for (Line& line : lines) {
+		drawLine(line);
 	}
 
 	addToZBuffer(polygon, polygon.getZBufferPosition());
@@ -651,8 +656,8 @@ QPoint ViewerWidget::getPolygonCenter(const MyPolygon& polygon) const {
 void ViewerWidget::scalePolygon(double scaleX, double scaleY) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
-		if (pair.first.getType() == Shape::POLYGON) {
-			MyPolygon polygon = static_cast<MyPolygon&>(pair.first);
+		if (pair.first.get().getType() == Shape::POLYGON) {
+			MyPolygon& polygon = static_cast<MyPolygon&>(pair.first.get());
 			const QVector<QPoint>& points = polygon.getPoints();
 			QPoint center = getPolygonCenter(polygon);
 
@@ -665,7 +670,7 @@ void ViewerWidget::scalePolygon(double scaleX, double scaleY) {
 			}
 
 			MyPolygon scaledPolygon(scaledPoints, polygon.getZBufferPosition(), polygon.getIsFilled());
-			pair.first = scaledPolygon;
+			pair.first = std::ref(scaledPolygon);
 
 			redrawAllShapes();
 		}
@@ -675,8 +680,8 @@ void ViewerWidget::scalePolygon(double scaleX, double scaleY) {
 void ViewerWidget::movePolygon(const QPoint& offset) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
-		if (pair.first.getType() == Shape::POLYGON) {
-			MyPolygon polygon = static_cast<MyPolygon&>(pair.first);
+		if (pair.first.get().getType() == Shape::POLYGON) {
+			MyPolygon& polygon = static_cast<MyPolygon&>(pair.first.get());
 			const QVector<QPoint>& points = polygon.getPoints();
 
 			QVector<QPoint> movedPoints;
@@ -685,7 +690,7 @@ void ViewerWidget::movePolygon(const QPoint& offset) {
 			}
 
 			MyPolygon movedPolygon(movedPoints, polygon.getZBufferPosition(), polygon.getIsFilled());
-			pair.first = movedPolygon;
+			pair.first = std::ref(movedPolygon);
 
 			redrawAllShapes();
 		}
@@ -695,8 +700,8 @@ void ViewerWidget::movePolygon(const QPoint& offset) {
 void ViewerWidget::turnPolygon(int angle) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
-		if (pair.first.getType() == Shape::POLYGON) {
-			MyPolygon polygon = static_cast<MyPolygon&>(pair.first);
+		if (pair.first.get().getType() == Shape::POLYGON) {
+			MyPolygon& polygon = static_cast<MyPolygon&>(pair.first.get());
 			const QVector<QPoint>& points = polygon.getPoints();
 			QPoint center = getPolygonCenter(polygon);
 
@@ -723,7 +728,7 @@ void ViewerWidget::turnPolygon(int angle) {
 			}
 
 			MyPolygon rotatedPolygon(rotatedPoints, polygon.getZBufferPosition(), polygon.getIsFilled());
-			pair.first = rotatedPolygon;
+			pair.first = std::ref(rotatedPolygon);
 
 			redrawAllShapes();
 		}
@@ -909,7 +914,7 @@ void ViewerWidget::fillPolygon(const MyPolygon& polygon) {
 //		*** Curve functions ***
 //-----------------------------------------
 
-void ViewerWidget::drawCurve(const BezierCurve& curve) {
+void ViewerWidget::drawCurve(BezierCurve& curve) {
 	// << Beziérova krivka >>
 	const QVector<QPoint>& curvePoints = curve.getPoints();
 	if (curvePoints.size() < 2) {
@@ -921,6 +926,8 @@ void ViewerWidget::drawCurve(const BezierCurve& curve) {
 	float deltaT = 0.01f;
 	QPoint Q0 = curvePoints[0];
 
+	std::vector<Line> lines;
+
 	for (float t = deltaT; t <= 1; t += deltaT) {
 		QVector<QPoint> tempPoints = curvePoints;
 
@@ -930,11 +937,15 @@ void ViewerWidget::drawCurve(const BezierCurve& curve) {
 			}
 		}
 
-		drawLine(Line(Q0, tempPoints[0], curve.getZBufferPosition(), curve.getIsFilled()));
+		lines.emplace_back(Q0, tempPoints[0], curve.getZBufferPosition(), curve.getIsFilled());
 		Q0 = tempPoints[0];
 	}
 	if (deltaT * floor(1 / deltaT) < 1) {
-		drawLine(Line(Q0, curvePoints.last(), curve.getZBufferPosition(), curve.getIsFilled()));
+		lines.emplace_back(Q0, curvePoints.last(), curve.getZBufferPosition(), curve.getIsFilled());
+	}
+
+	for (Line& line : lines) {
+		drawLine(line);
 	}
 
 	addToZBuffer(curve, curve.getZBufferPosition());
@@ -944,8 +955,8 @@ void ViewerWidget::drawCurve(const BezierCurve& curve) {
 void ViewerWidget::moveCurve(const QPoint& offset) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
-		if (pair.first.getType() == Shape::BEZIER_CURVE) {
-			BezierCurve curve = static_cast<BezierCurve&>(pair.first);
+		if (pair.first.get().getType() == Shape::BEZIER_CURVE) {
+			BezierCurve& curve = static_cast<BezierCurve&>(pair.first.get());
 			const QVector<QPoint>& points = curve.getPoints();
 
 			QVector<QPoint> movedPoints;
@@ -954,7 +965,7 @@ void ViewerWidget::moveCurve(const QPoint& offset) {
 			}
 
 			BezierCurve movedCurve(movedPoints, curve.getZBufferPosition(), curve.getIsFilled());
-			pair.first = movedCurve;
+			pair.first = std::ref(movedCurve);
 
 			redrawAllShapes();
 		}
@@ -964,8 +975,8 @@ void ViewerWidget::moveCurve(const QPoint& offset) {
 void ViewerWidget::scaleCurve(double scaleX, double scaleY) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
-		if (pair.first.getType() == Shape::BEZIER_CURVE) {
-			BezierCurve curve = static_cast<BezierCurve&>(pair.first);
+		if (pair.first.get().getType() == Shape::BEZIER_CURVE) {
+			BezierCurve& curve = static_cast<BezierCurve&>(pair.first.get());
 			const QVector<QPoint>& points = curve.getPoints();
 			QPoint center = calculateCurveCenter(curve);
 
@@ -978,7 +989,7 @@ void ViewerWidget::scaleCurve(double scaleX, double scaleY) {
 			}
 
 			BezierCurve scaledCurve(scaledPoints, curve.getZBufferPosition(), curve.getIsFilled());
-			pair.first = scaledCurve;
+			pair.first = std::ref(scaledCurve);
 
 			redrawAllShapes();
 		}
@@ -988,8 +999,8 @@ void ViewerWidget::scaleCurve(double scaleX, double scaleY) {
 void ViewerWidget::turnCurve(int angle) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
-		if (pair.first.getType() == Shape::BEZIER_CURVE) {
-			BezierCurve curve = static_cast<BezierCurve&>(pair.first);
+		if (pair.first.get().getType() == Shape::BEZIER_CURVE) {
+			BezierCurve& curve = static_cast<BezierCurve&>(pair.first.get());
 			const QVector<QPoint>& points = curve.getPoints();
 			QPoint center = calculateCurveCenter(curve);
 
@@ -1016,7 +1027,7 @@ void ViewerWidget::turnCurve(int angle) {
 			}
 
 			BezierCurve rotatedCurve(rotatedPoints, curve.getZBufferPosition(), curve.getIsFilled());
-			pair.first = rotatedCurve;
+			pair.first = std::ref(rotatedCurve);
 
 			redrawAllShapes();
 		}

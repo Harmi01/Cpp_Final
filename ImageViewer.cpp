@@ -81,8 +81,8 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 			int newRowIndex = ui->listWidget->count() - 1;
 			ui->listWidget->setCurrentRow(newRowIndex);
 
-			Line line(w->getDrawLineBegin(), e->pos(), layerIndex, ui->checkBoxFilling->isChecked());
-			w->drawShape(line);
+			Line* line = new Line(w->getDrawLineBegin(), e->pos(), layerIndex, ui->checkBoxFilling->isChecked());
+			w->drawShape(*line);
 
 			w->setDrawLineActivated(false);
 			lineDone = true;
@@ -104,20 +104,21 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 			int newRowIndex = ui->listWidget->count() - 1;
 			ui->listWidget->setCurrentRow(newRowIndex);
 
-			Circle circle(w->getDrawCircleCenter(), e->pos(), layerIndex, ui->checkBoxFilling->isChecked());
-			w->drawShape(circle);
+			Circle* circle = new Circle(w->getDrawCircleCenter(), e->pos(), layerIndex, ui->checkBoxFilling->isChecked());
+			w->drawShape(*circle);
 			w->setDrawCircleActivated(false);
+			circleDone = true;
 		}
 		else {
 			w->setDrawCircleCenter(e->pos());
 			w->setDrawCircleActivated(true);
-			w->setPixel(e->pos().x(),e->pos().y(), borderColor);
+			w->setPixel(e->pos().x(), e->pos().y(), borderColor);
 			w->update();
 		}
 	}
 
 	//	>> Polygon Drawing
-	if (e->button() == Qt::LeftButton && ui->toolButtonDrawPolygon->isChecked() && !polygonDone) {
+	if (e->button() == Qt::LeftButton && ui->toolButtonDrawPolygon->isChecked()) {
 		if (!polygon) {
 			polygon = new MyPolygon(QVector<QPoint>(), ui->listWidget->count() + 1, ui->checkBoxFilling->isChecked());
 			ui->listWidget->addItem(QString("Polygon %1").arg(ui->listWidget->count() + 1));
@@ -136,7 +137,6 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 			polygon = nullptr;
 		}
 		ui->toolButtonDrawPolygon->setDisabled(true);
-		polygonDone = true;
 	}
 	//	>> Curve Drawing
 	if (e->button() == Qt::LeftButton && ui->toolButtonDrawCurve->isChecked() && !curveDone) {
@@ -160,7 +160,6 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 		ui->toolButtonDrawCurve->setDisabled(true);
 		curveDone = true;
 	}
-
 }
 void ImageViewer::ViewerWidgetMouseButtonRelease(ViewerWidget* w, QEvent* event)
 {
