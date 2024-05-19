@@ -23,13 +23,14 @@ private:
 	QSettings settings;
 	QMessageBox msgBox;
 
-	bool polygonDone = false;
-	bool lineDone = false;
-	bool circleDone = false;
-	bool curveDone = false;
-	bool rectangleDone = false;
 	bool objectLoaded = false;
 	int currentLayer;
+
+	MyPolygon* polygon = nullptr;
+	MyRectangle* rectangle = nullptr;
+	BezierCurve* curve = nullptr;
+	Line* line = nullptr;
+	Circle* circle = nullptr;
 
 	//Event filters
 	bool eventFilter(QObject* obj, QEvent* event);
@@ -55,6 +56,7 @@ private slots:
 	void on_actionClear_triggered();
 	void on_actionExit_triggered();
 	void layerSelectionChanged(int currentRow);
+	void on_pushButtonSaveImage_clicked();
 
 //-----------------------------------------
 //		*** Tools 2D slots ***
@@ -63,4 +65,8 @@ private slots:
 	void on_pushButtonSetBorderColor_clicked();
 	void on_pushButtonTurn_clicked();
 	void on_pushButtonScale_clicked();
+	void on_pushButtonChangeLayerColor_clicked();
+	void on_pushButtonLayerUp_clicked();
+	void on_pushButtonLayerDown_clicked();
+	void on_pushButtonDeleteObject_clicked();
 };

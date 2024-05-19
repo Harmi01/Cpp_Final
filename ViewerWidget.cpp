@@ -85,7 +85,6 @@ bool ViewerWidget::changeSize(int width, int height)
 void ViewerWidget::clear()
 {
 	img->fill(Qt::white);
-	zBuffer.clear();
 	update();
 }
 
@@ -143,6 +142,40 @@ void ViewerWidget::setPixel(int x, int y, const QColor& color)
 //-----------------------------------------
 //		*** Drawing functions ***
 //-----------------------------------------
+void ViewerWidget::changeLayerColor(int zBufferPosition, const QColor& newBorderColor, const QColor& newFillingColor) {
+	for (auto& pair : zBuffer) {
+		if (pair.second == zBufferPosition) {
+			Shape& shape = pair.first.get();
+
+			shape.setBorderColor(newBorderColor);
+			shape.setFillingColor(newFillingColor);
+
+			switch (shape.getType()) {
+			case Shape::LINE:
+				drawLine(static_cast<Line&>(shape));
+				break;
+			case Shape::RECTANGLE:
+				drawRectangle(static_cast<MyRectangle&>(shape));
+				break;
+			case Shape::POLYGON:
+				drawPolygon(static_cast<MyPolygon&>(shape));
+				break;
+			case Shape::CIRCLE:
+				drawCircle(static_cast<Circle&>(shape));
+				break;
+			case Shape::BEZIER_CURVE:
+				drawCurve(static_cast<BezierCurve&>(shape));
+				break;
+			default:
+				break;
+			}
+
+			update();
+			break;
+		}
+	}
+}
+
 void ViewerWidget::drawShape(Shape& shape) {
 	switch (shape.getType()) {
 	case Shape::LINE: {
@@ -152,6 +185,7 @@ void ViewerWidget::drawShape(Shape& shape) {
 	}
 	case Shape::RECTANGLE: {
 		MyRectangle& rectangle = static_cast<MyRectangle&>(shape);
+		drawRectangle(rectangle);
 		break;
 	}
 	case Shape::POLYGON: {
@@ -179,6 +213,12 @@ void ViewerWidget::addToZBuffer(Shape& shape, int depth) {
 	std::sort(zBuffer.begin(), zBuffer.end(), [](const std::pair<std::reference_wrapper<Shape>, int>& a, const std::pair<std::reference_wrapper<Shape>, int>& b) {
 		return a.second < b.second;
 		});
+}
+
+void ViewerWidget::deleteObjectFromZBuffer(int currentIndex) {
+	if (currentIndex >= 0 && currentIndex < zBuffer.size()) {
+		zBuffer.erase(zBuffer.begin() + currentIndex);
+	}
 }
 
 void ViewerWidget::moveShapeUp(int zBufferPosition) {
@@ -209,7 +249,7 @@ void ViewerWidget::moveShapeDown(int zBufferPosition) {
 
 void ViewerWidget::redrawAllShapes() {
 	clear();
-	for (const auto& shapePair : zBuffer) {
+	for (auto& shapePair : zBuffer) {
 		drawShape(shapePair.first.get());
 	}
 	update();
@@ -220,9 +260,11 @@ void ViewerWidget::redrawAllShapes() {
 //-----------------------------------------
 void ViewerWidget::drawLine(Line& line)
 {
+	borderColor = line.getBorderColor();
 	painter->setPen(QPen(borderColor));
 
 	QVector<QPoint> linePoints = line.getPoints();
+
 	QVector<QPoint> lineToClip = line.getPoints();
 
 	clipLineWithPolygon(lineToClip);
@@ -238,9 +280,13 @@ void ViewerWidget::drawLine(Line& line)
 		linePoints.append(line.getPoints()[1]);
 	}
 
+	for (const QPoint& point : linePoints) {
+		qDebug() << point;
+	}
+
 	drawLineBresenham(linePoints);
-	addToZBuffer(line, line.getZBufferPosition());
-	redrawAllShapes();
+	line.setPoints(linePoints);
+	update();
 }
 
 void ViewerWidget::clipLineWithPolygon(QVector<QPoint> linePoints) {
@@ -320,7 +366,7 @@ void ViewerWidget::drawLineBresenham(QVector<QPoint>& linePoints) {
 		k2 = 2 * (ady - adx);  // Konštanta pre diagonálny krok
 
 		while (x != linePoints.last().x()) {
-			painter->drawPoint(x, y); // Kreslenie bodu na aktuálnych súradniciach
+			setPixel(x, y, borderColor); // Kreslenie bodu na aktuálnych súradniciach
 			x += incrementX; // Posun v x-ovej osi
 			if (p >= 0) {
 				y += incrementY; // Posun v y-ovej osi, ak je to potrebné
@@ -338,7 +384,7 @@ void ViewerWidget::drawLineBresenham(QVector<QPoint>& linePoints) {
 		k2 = 2 * (adx - ady);  // Konštanta pre diagonálny krok
 
 		while (y != linePoints.last().y()) {
-			painter->drawPoint(x, y); // Kreslenie bodu na aktuálnych súradniciach
+			setPixel(x, y, borderColor); // Kreslenie bodu na aktuálnych súradniciach
 			y += incrementY; // Posun v y-ovej osi
 			if (p >= 0) {
 				x += incrementX; // Posun v x-ovej osi, ak je to potrebné
@@ -350,13 +396,13 @@ void ViewerWidget::drawLineBresenham(QVector<QPoint>& linePoints) {
 		}
 	}
 
-	painter->drawPoint(linePoints.last().x(), linePoints.last().y()); // Vykreslenie posledného bodu
-	update();
+	setPixel(linePoints.last().x(), linePoints.last().y(), borderColor); // Vykreslenie posledného bodu
 }
 
 void ViewerWidget::moveLine(const QPoint& offset) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
+		qDebug() << "ShapeType: " << pair.first.get().getType();
 		if (pair.first.get().getType() == Shape::LINE) {
 			Line& line = static_cast<Line&>(pair.first.get());
 			QVector<QPoint> points = line.getPoints();
@@ -365,9 +411,7 @@ void ViewerWidget::moveLine(const QPoint& offset) {
 				point += offset;
 			}
 
-			Line movedLine(points[0], points[1], line.getZBufferPosition(), line.getIsFilled());
-			pair.first = std::ref(movedLine);
-
+			pair.first.get().setPoints(points);
 			redrawAllShapes();
 		}
 	}
@@ -400,15 +444,13 @@ void ViewerWidget::turnLine(int angle) {
 				rotatedPoints.push_back(QPoint(rotatedX, rotatedY));
 			}
 
-			Line rotatedLine(rotatedPoints[0], rotatedPoints[1], line.getZBufferPosition(), line.getIsFilled());
-			pair.first = std::ref(rotatedLine);
-
+			pair.first.get().setPoints(rotatedPoints);
 			redrawAllShapes();
 		}
 	}
 }
 
-QPoint ViewerWidget::getLineCenter(const Line& line) const {
+QPoint ViewerWidget::getLineCenter(Line& line) const {
 	QVector<QPoint> points = line.getPoints();
 	if (points.isEmpty()) {
 		return QPoint();
@@ -437,9 +479,7 @@ void ViewerWidget::scaleLine(double scaleX, double scaleY) {
 				scaledPoints.append(QPoint(static_cast<int>(std::round(newX)), static_cast<int>(std::round(newY))));
 			}
 
-			Line scaledLine(scaledPoints[0], scaledPoints[1], line.getZBufferPosition(), line.getIsFilled());
-			pair.first = std::ref(scaledLine);
-
+			pair.first.get().setPoints(scaledPoints);
 			redrawAllShapes();
 		}
 	}
@@ -449,6 +489,8 @@ void ViewerWidget::scaleLine(double scaleX, double scaleY) {
 //		*** Circle functions ***
 //-----------------------------------------
 void ViewerWidget::drawCircle(Circle& circle) {
+	borderColor = circle.getBorderColor();
+	fillingColor = circle.getFillingColor();
 	QPoint center = circle.getPoints()[0];
 	QPoint radiusPoint = circle.getPoints()[1];
 	int r = std::sqrt(std::pow(radiusPoint.x() - center.x(), 2) + std::pow(radiusPoint.y() - center.y(), 2));
@@ -457,14 +499,9 @@ void ViewerWidget::drawCircle(Circle& circle) {
 	int p = 1 - r;
 
 	if (circle.getIsFilled()) {
-		painter->setPen(QPen(fillingColor));
-		for (int i = -r; i <= r; i++) {
-			painter->drawPoint(center.x() + i, center.y() + r);
-			painter->drawPoint(center.x() + i, center.y() - r);
-		}
+		drawSymmetricPointsFilled(center, x, y);
 	}
 	else {
-		painter->setPen(QPen(borderColor));
 		drawSymmetricPoints(center, x, y);
 	}
 
@@ -479,37 +516,14 @@ void ViewerWidget::drawCircle(Circle& circle) {
 		}
 
 		if (circle.getIsFilled()) {
-			painter->setPen(QPen(fillingColor));
 			drawSymmetricPointsFilled(center, x, y);
 		}
 		else {
-			painter->setPen(QPen(borderColor));
 			drawSymmetricPoints(center, x, y);
 		}
 	}
 
-	if (circle.getIsFilled()) {
-		painter->setPen(QPen(borderColor));
-		x = 0;
-		y = r;
-		p = 1 - r;
-		drawSymmetricPoints(center, x, y);
-
-		while (x < y) {
-			x++;
-			if (p < 0) {
-				p += 2 * x + 1;
-			}
-			else {
-				y--;
-				p += 2 * (x - y) + 1;
-			}
-			drawSymmetricPoints(center, x, y);
-		}
-	}
-
-	addToZBuffer(circle, circle.getZBufferPosition());
-	redrawAllShapes();
+	update();
 }
 
 void ViewerWidget::drawSymmetricPoints(const QPoint& center, int x, int y) {
@@ -525,18 +539,18 @@ void ViewerWidget::drawSymmetricPoints(const QPoint& center, int x, int y) {
 	};
 
 	for (auto& point : points) {
-		painter->drawPoint(center.x() + point.x(), center.y() + point.y());
+		setPixel(center.x() + point.x(), center.y() + point.y(), borderColor);
 	}
 }
 
 void ViewerWidget::drawSymmetricPointsFilled(const QPoint& center, int x, int y) {
 	for (int i = -x; i <= x; i++) {
-		painter->drawPoint(center.x() + i, center.y() + y);
-		painter->drawPoint(center.x() + i, center.y() - y);
+		setPixel(center.x() + i, center.y() + y, fillingColor);
+		setPixel(center.x() + i, center.y() - y, fillingColor);
 	}
 	for (int i = -y; i <= y; i++) {
-		painter->drawPoint(center.x() + i, center.y() + x);
-		painter->drawPoint(center.x() + i, center.y() - x);
+		setPixel(center.x() + i, center.y() + x, fillingColor);
+		setPixel(center.x() + i, center.y() - x, fillingColor);
 	}
 }
 
@@ -551,9 +565,7 @@ void ViewerWidget::moveCircle(const QPoint& offset) {
 				point += offset;
 			}
 
-			Circle movedCircle(points[0], points[1], circle.getZBufferPosition(), circle.getIsFilled());
-			pair.first = std::ref(movedCircle);
-
+			pair.first.get().setPoints(points);
 			redrawAllShapes();
 		}
 	}
@@ -572,9 +584,7 @@ void ViewerWidget::scaleCircle(double scaleX, double scaleY) {
 			int newY = center.y() + static_cast<int>((radiusPoint.y() - center.y()) * scaleY);
 			points[1] = QPoint(newX, newY);
 
-			Circle scaledCircle(points[0], points[1], circle.getZBufferPosition(), circle.getIsFilled());
-			pair.first = std::ref(scaledCircle);
-
+			pair.first.get().setPoints(points);
 			redrawAllShapes();
 		}
 	}
@@ -585,6 +595,8 @@ void ViewerWidget::scaleCircle(double scaleX, double scaleY) {
 //		*** Polygon Functions ***
 //-----------------------------------------
 void ViewerWidget::drawPolygon(MyPolygon& polygon) {
+	borderColor = polygon.getBorderColor();
+	fillingColor = polygon.getFillingColor();
 	const QVector<QPoint>& pointsVector = polygon.getPoints();
 
 	if (pointsVector.size() < 2) {
@@ -621,20 +633,19 @@ void ViewerWidget::drawPolygon(MyPolygon& polygon) {
 	std::vector<Line> lines;
 	if (!polygonPoints.isEmpty()) {
 		for (int i = 0; i < polygonPoints.size() - 1; i++) {
-			lines.emplace_back(polygonPoints.at(i), polygonPoints.at(i + 1), polygon.getZBufferPosition(), polygon.getIsFilled());
+			lines.emplace_back(polygonPoints.at(i), polygonPoints.at(i + 1), polygon.getZBufferPosition(), polygon.getIsFilled(), borderColor, fillingColor);
 		}
-		lines.emplace_back(polygonPoints.last(), polygonPoints.first(), polygon.getZBufferPosition(), polygon.getIsFilled());
+		lines.emplace_back(polygonPoints.last(), polygonPoints.first(), polygon.getZBufferPosition(), polygon.getIsFilled(), borderColor, fillingColor);
 	}
 
 	for (Line& line : lines) {
 		drawLine(line);
 	}
 
-	addToZBuffer(polygon, polygon.getZBufferPosition());
-	redrawAllShapes();
+	update();
 }
 
-QPoint ViewerWidget::getPolygonCenter(const MyPolygon& polygon) const {
+QPoint ViewerWidget::getPolygonCenter(Shape& polygon) const {
 	const QVector<QPoint>& points = polygon.getPoints();
 	if (points.isEmpty()) {
 		return QPoint();
@@ -669,9 +680,7 @@ void ViewerWidget::scalePolygon(double scaleX, double scaleY) {
 				scaledPoints.append(QPoint(static_cast<int>(std::round(newX)), static_cast<int>(std::round(newY))));
 			}
 
-			MyPolygon scaledPolygon(scaledPoints, polygon.getZBufferPosition(), polygon.getIsFilled());
-			pair.first = std::ref(scaledPolygon);
-
+			pair.first.get().setPoints(scaledPoints);
 			redrawAllShapes();
 		}
 	}
@@ -680,6 +689,7 @@ void ViewerWidget::scalePolygon(double scaleX, double scaleY) {
 void ViewerWidget::movePolygon(const QPoint& offset) {
 	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
 		auto& pair = zBuffer[currentLayer];
+		qDebug() << "ShapeType: " << pair.first.get().getType();
 		if (pair.first.get().getType() == Shape::POLYGON) {
 			MyPolygon& polygon = static_cast<MyPolygon&>(pair.first.get());
 			const QVector<QPoint>& points = polygon.getPoints();
@@ -689,9 +699,7 @@ void ViewerWidget::movePolygon(const QPoint& offset) {
 				movedPoints.append(point + offset);
 			}
 
-			MyPolygon movedPolygon(movedPoints, polygon.getZBufferPosition(), polygon.getIsFilled());
-			pair.first = std::ref(movedPolygon);
-
+			pair.first.get().setPoints(movedPoints);
 			redrawAllShapes();
 		}
 	}
@@ -727,15 +735,13 @@ void ViewerWidget::turnPolygon(int angle) {
 				rotatedPoints.append(QPoint(rotatedX, rotatedY));
 			}
 
-			MyPolygon rotatedPolygon(rotatedPoints, polygon.getZBufferPosition(), polygon.getIsFilled());
-			pair.first = std::ref(rotatedPolygon);
-
+			pair.first.get().setPoints(rotatedPoints);
 			redrawAllShapes();
 		}
 	}
 }
 
-QVector<QPoint> ViewerWidget::trimPolygon(const MyPolygon& polygon) {
+QVector<QPoint> ViewerWidget::trimPolygon(Shape& polygon) {
 	QVector<QPoint> pointsVector = polygon.getPoints();
 
 	if (pointsVector.isEmpty()) {
@@ -822,7 +828,7 @@ QVector<ViewerWidget::Edge> ViewerWidget::loadEdges(const QVector<QPoint>& point
 	return edges;
 }
 
-void ViewerWidget::fillPolygon(const MyPolygon& polygon) {
+void ViewerWidget::fillPolygon(Shape& polygon) {
 	const QVector<QPoint>& points = polygon.getPoints();
 
 	if (points.isEmpty()) {
@@ -916,6 +922,8 @@ void ViewerWidget::fillPolygon(const MyPolygon& polygon) {
 
 void ViewerWidget::drawCurve(BezierCurve& curve) {
 	// << Beziérova krivka >>
+	borderColor = curve.getBorderColor();
+	fillingColor = curve.getFillingColor();
 	const QVector<QPoint>& curvePoints = curve.getPoints();
 	if (curvePoints.size() < 2) {
 		QMessageBox::warning(this, "Nedostatocny pocet bodov", "Nemozno nakreslit krivku s menej ako dvomi riadiacimi bodmi.", QMessageBox::Ok);
@@ -937,19 +945,16 @@ void ViewerWidget::drawCurve(BezierCurve& curve) {
 			}
 		}
 
-		lines.emplace_back(Q0, tempPoints[0], curve.getZBufferPosition(), curve.getIsFilled());
+		lines.emplace_back(Q0, tempPoints[0], curve.getZBufferPosition(), curve.getIsFilled(), borderColor, fillingColor);
 		Q0 = tempPoints[0];
 	}
 	if (deltaT * floor(1 / deltaT) < 1) {
-		lines.emplace_back(Q0, curvePoints.last(), curve.getZBufferPosition(), curve.getIsFilled());
+		lines.emplace_back(Q0, curvePoints.last(), curve.getZBufferPosition(), curve.getIsFilled(), borderColor, fillingColor);
 	}
 
 	for (Line& line : lines) {
 		drawLine(line);
 	}
-
-	addToZBuffer(curve, curve.getZBufferPosition());
-	redrawAllShapes();
 }
 
 void ViewerWidget::moveCurve(const QPoint& offset) {
@@ -964,9 +969,7 @@ void ViewerWidget::moveCurve(const QPoint& offset) {
 				movedPoints.append(point + offset);
 			}
 
-			BezierCurve movedCurve(movedPoints, curve.getZBufferPosition(), curve.getIsFilled());
-			pair.first = std::ref(movedCurve);
-
+			pair.first.get().setPoints(movedPoints);
 			redrawAllShapes();
 		}
 	}
@@ -988,9 +991,7 @@ void ViewerWidget::scaleCurve(double scaleX, double scaleY) {
 				scaledPoints.append(QPoint(static_cast<int>(std::round(newX)), static_cast<int>(std::round(newY))));
 			}
 
-			BezierCurve scaledCurve(scaledPoints, curve.getZBufferPosition(), curve.getIsFilled());
-			pair.first = std::ref(scaledCurve);
-
+			pair.first.get().setPoints(scaledPoints);
 			redrawAllShapes();
 		}
 	}
@@ -1026,15 +1027,13 @@ void ViewerWidget::turnCurve(int angle) {
 				rotatedPoints.append(QPoint(rotatedX, rotatedY));
 			}
 
-			BezierCurve rotatedCurve(rotatedPoints, curve.getZBufferPosition(), curve.getIsFilled());
-			pair.first = std::ref(rotatedCurve);
-
+			pair.first.get().setPoints(rotatedPoints);
 			redrawAllShapes();
 		}
 	}
 }
 
-QPoint ViewerWidget::calculateCurveCenter(const BezierCurve& curve) const {
+QPoint ViewerWidget::calculateCurveCenter(BezierCurve& curve) const {
 	const QVector<QPoint>& points = curve.getPoints();
 	if (points.isEmpty()) {
 		return QPoint();
@@ -1051,4 +1050,142 @@ QPoint ViewerWidget::calculateCurveCenter(const BezierCurve& curve) const {
 	centroidY /= points.size();
 
 	return QPoint(static_cast<int>(centroidX), static_cast<int>(centroidY));
+}
+
+//-----------------------------------------
+//		*** Rectangle functions ***
+//-----------------------------------------
+
+void ViewerWidget::drawRectangle(MyRectangle& rectangle) {
+	borderColor = rectangle.getBorderColor();
+	fillingColor = rectangle.getFillingColor();
+	const QVector<QPoint>& pointsVector = rectangle.getPoints();
+
+	if (pointsVector.size() < 2) {
+		QMessageBox::warning(this, "Insufficient Points", "Not enough points to render the rectangle.");
+		return;
+	}
+
+	painter->setPen(QPen(borderColor));
+
+	QVector<QPoint> rectanglePoints = rectangle.getPoints();
+
+	// Check if all points are outside the drawing area
+	bool allPointsOutside = std::all_of(pointsVector.begin(), pointsVector.end(), [this](const QPoint& point) {
+		return !isInside(point);
+		});
+
+	if (allPointsOutside) {
+		qDebug() << "Rectangle is outside the boundary.";
+		return;
+	}
+
+	// Check each point to see if it is inside the drawing area, and trim if necessary
+	for (const QPoint& point : rectanglePoints) {
+		if (!isInside(point)) {
+			rectanglePoints = trimPolygon(rectangle); // Trim the rectangle if any points are outside the boundary
+			break;
+		}
+	}
+
+	if (rectangle.getIsFilled()) {
+		fillPolygon(rectangle);
+	}
+	painter->setPen(QPen(borderColor));
+
+	std::vector<Line> lines;
+	if (!rectanglePoints.isEmpty()) {
+		lines.emplace_back(rectanglePoints.at(0), rectanglePoints.at(1), rectangle.getZBufferPosition(), rectangle.getIsFilled(), borderColor, fillingColor);
+		lines.emplace_back(rectanglePoints.at(1), rectanglePoints.at(2), rectangle.getZBufferPosition(), rectangle.getIsFilled(), borderColor, fillingColor);
+		lines.emplace_back(rectanglePoints.at(2), rectanglePoints.at(3), rectangle.getZBufferPosition(), rectangle.getIsFilled(), borderColor, fillingColor);
+		lines.emplace_back(rectanglePoints.at(3), rectanglePoints.at(0), rectangle.getZBufferPosition(), rectangle.getIsFilled(), borderColor, fillingColor);
+	}
+	for (Line& line : lines) {
+		drawLine(line);
+	}
+
+	update();
+}
+
+void ViewerWidget::moveRectangle(const QPoint& offset) {
+	qDebug() << "Current Layer: " << currentLayer;
+	qDebug() << "Z-Buffer Size: " << zBuffer.size();
+	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
+		auto& pair = zBuffer[currentLayer];
+		qDebug() << "ShapeType: " << pair.first.get().getType();
+		if (pair.first.get().getType() == Shape::RECTANGLE) {
+			MyRectangle& rectangle = static_cast<MyRectangle&>(pair.first.get());
+			const QVector<QPoint>& points = rectangle.getPoints();
+
+			QVector<QPoint> movedPoints;
+			for (const QPoint& point : points) {
+				movedPoints.append(point + offset);
+			}
+
+			for (const QPoint& point : movedPoints) {
+				qDebug() << "Rectangle Point: " << point.x() << "," << point.y();
+			}
+
+			pair.first.get().setPoints(movedPoints);
+			redrawAllShapes();
+		}
+	}
+}
+
+void ViewerWidget::scaleRectangle(double scaleX, double scaleY) {
+	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
+		auto& pair = zBuffer[currentLayer];
+		if (pair.first.get().getType() == Shape::RECTANGLE) {
+			MyRectangle& rectangle = static_cast<MyRectangle&>(pair.first.get());
+			const QVector<QPoint>& points = rectangle.getPoints();
+			QPoint center = getPolygonCenter(rectangle);
+
+			QVector<QPoint> scaledPoints;
+			for (const QPoint& point : points) {
+				double newX = center.x() + (point.x() - center.x()) * scaleX;
+				double newY = center.y() + (point.y() - center.y()) * scaleY;
+
+				scaledPoints.append(QPoint(static_cast<int>(std::round(newX)), static_cast<int>(std::round(newY))));
+			}
+
+			pair.first.get().setPoints(scaledPoints);
+			redrawAllShapes();
+		}
+	}
+}
+
+void ViewerWidget::turnRectangle(int angle) {
+	if (currentLayer >= 0 && currentLayer < zBuffer.size()) {
+		auto& pair = zBuffer[currentLayer];
+		if (pair.first.get().getType() == Shape::RECTANGLE) {
+			MyRectangle& rectangle = static_cast<MyRectangle&>(pair.first.get());
+			const QVector<QPoint>& points = rectangle.getPoints();
+			QPoint center = getPolygonCenter(rectangle);
+
+			double radians = qDegreesToRadians(static_cast<double>(angle));
+			double cosAngle = std::cos(radians);
+			double sinAngle = std::sin(radians);
+
+			QVector<QPoint> rotatedPoints;
+
+			for (const QPoint& point : points) {
+				// Translate the point to the origin
+				int translatedX = point.x() - center.x();
+				int translatedY = point.y() - center.y();
+
+				// Rotate the point
+				int rotatedX = static_cast<int>(translatedX * cosAngle - translatedY * sinAngle);
+				int rotatedY = static_cast<int>(translatedX * sinAngle + translatedY * cosAngle);
+
+				// Translate the point back
+				rotatedX += center.x();
+				rotatedY += center.y();
+
+				rotatedPoints.append(QPoint(rotatedX, rotatedY));
+			}
+
+			pair.first.get().setPoints(rotatedPoints);
+			redrawAllShapes();
+		}
+	}
 }

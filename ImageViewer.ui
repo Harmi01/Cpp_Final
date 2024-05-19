@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1296</width>
-    <height>880</height>
+    <width>1228</width>
+    <height>786</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,7 +20,7 @@
       <property name="maximumSize">
        <size>
         <width>250</width>
-        <height>16777215</height>
+        <height>700</height>
        </size>
       </property>
       <widget class="QWidget" name="page">
@@ -30,24 +30,57 @@
           <property name="maximumSize">
            <size>
             <width>16777215</width>
-            <height>100</height>
+            <height>150</height>
            </size>
           </property>
           <property name="title">
            <string>Color</string>
           </property>
-          <layout class="QVBoxLayout" name="verticalLayout_2">
-           <item>
+          <layout class="QGridLayout" name="gridLayout_5">
+           <item row="1" column="1">
+            <widget class="QPushButton" name="pushButtonSetBorderColor">
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="0">
+            <widget class="QLabel" name="label_2">
+             <property name="maximumSize">
+              <size>
+               <width>40</width>
+               <height>16777215</height>
+              </size>
+             </property>
+             <property name="text">
+              <string>Filling:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
             <widget class="QPushButton" name="pushButtonSetColor">
              <property name="text">
               <string/>
              </property>
             </widget>
            </item>
-           <item>
-            <widget class="QPushButton" name="pushButtonSetBorderColor">
+           <item row="1" column="0">
+            <widget class="QLabel" name="label">
+             <property name="maximumSize">
+              <size>
+               <width>40</width>
+               <height>16777215</height>
+              </size>
+             </property>
              <property name="text">
-              <string/>
+              <string>Border:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QPushButton" name="pushButtonChangeLayerColor">
+             <property name="text">
+              <string>Change Current Layer</string>
              </property>
             </widget>
            </item>
@@ -286,9 +319,9 @@
             </widget>
            </item>
            <item row="6" column="1" colspan="2">
-            <widget class="QPushButton" name="pushButtonSaveVTK">
+            <widget class="QPushButton" name="pushButtonSaveImage">
              <property name="text">
-              <string>Save VTK</string>
+              <string>Save</string>
              </property>
             </widget>
            </item>
@@ -331,8 +364,8 @@
      <widget class="QScrollArea" name="scrollArea">
       <property name="maximumSize">
        <size>
-        <width>16777215</width>
-        <height>16777215</height>
+        <width>700</width>
+        <height>700</height>
        </size>
       </property>
       <property name="widgetResizable">
@@ -343,8 +376,8 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>764</width>
-         <height>800</height>
+         <width>696</width>
+         <height>698</height>
         </rect>
        </property>
       </widget>
@@ -355,7 +388,7 @@
       <property name="maximumSize">
        <size>
         <width>250</width>
-        <height>16777215</height>
+        <height>700</height>
        </size>
       </property>
       <property name="title">
@@ -399,7 +432,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1296</width>
+     <width>1228</width>
      <height>21</height>
     </rect>
    </property>

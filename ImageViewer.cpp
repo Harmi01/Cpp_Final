@@ -69,23 +69,25 @@ bool ImageViewer::ViewerWidgetEventFilter(QObject* obj, QEvent* event)
 void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 {
 	QMouseEvent* e = static_cast<QMouseEvent*>(event);
-	static MyPolygon* polygon = nullptr;
-	static BezierCurve* curve = nullptr;
+	static bool polygonActive = false;
+	static bool curveActive = false;
 
 	//	>> Line Drawing
-	if (e->button() == Qt::LeftButton && ui->toolButtonDrawLine->isChecked() && !lineDone)
+	if (e->button() == Qt::LeftButton && ui->toolButtonDrawLine->isChecked() && !ui->pushButtonMove->isChecked())
 	{
 		if (w->getDrawLineActivated()) {
-			int layerIndex = ui->listWidget->count() + 1;
-			ui->listWidget->addItem(QString("Line %1").arg(layerIndex));
+			int layerIndex = ui->listWidget->count();
+			ui->listWidget->addItem(QString("Line %1").arg(layerIndex + 1));
 			int newRowIndex = ui->listWidget->count() - 1;
 			ui->listWidget->setCurrentRow(newRowIndex);
+			layerSelectionChanged(newRowIndex);
 
-			Line* line = new Line(w->getDrawLineBegin(), e->pos(), layerIndex, ui->checkBoxFilling->isChecked());
-			w->drawShape(*line);
+			line = new Line(w->getDrawLineBegin(), e->pos(), layerIndex, ui->checkBoxFilling->isChecked(), borderColor, fillingColor);
+			w->drawLine(*line);
+			w->addToZBuffer(*line, line->getZBufferPosition());
 
 			w->setDrawLineActivated(false);
-			lineDone = true;
+			w->update();
 		}
 		else {
 			w->setDrawLineBegin(e->pos());
@@ -96,18 +98,18 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 	}
 
 	//	>> Circle Drawing
-	if (e->button() == Qt::LeftButton && ui->toolButtonDrawCircle->isChecked() && !circleDone)
+	if (e->button() == Qt::LeftButton && ui->toolButtonDrawCircle->isChecked())
 	{
 		if (w->getDrawCircleActivated()) {
-			int layerIndex = ui->listWidget->count() + 1;
-			ui->listWidget->addItem(QString("Circle %1").arg(layerIndex));
+			int layerIndex = ui->listWidget->count();
+			ui->listWidget->addItem(QString("Circle %1").arg(layerIndex + 1));
 			int newRowIndex = ui->listWidget->count() - 1;
 			ui->listWidget->setCurrentRow(newRowIndex);
 
-			Circle* circle = new Circle(w->getDrawCircleCenter(), e->pos(), layerIndex, ui->checkBoxFilling->isChecked());
-			w->drawShape(*circle);
+			circle = new Circle(w->getDrawCircleCenter(), e->pos(), layerIndex, ui->checkBoxFilling->isChecked(), borderColor, fillingColor);
+			w->drawCircle(*circle);
+			vW->addToZBuffer(*circle, circle->getZBufferPosition());
 			w->setDrawCircleActivated(false);
-			circleDone = true;
 		}
 		else {
 			w->setDrawCircleCenter(e->pos());
@@ -118,12 +120,15 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 	}
 
 	//	>> Polygon Drawing
-	if (e->button() == Qt::LeftButton && ui->toolButtonDrawPolygon->isChecked()) {
-		if (!polygon) {
-			polygon = new MyPolygon(QVector<QPoint>(), ui->listWidget->count() + 1, ui->checkBoxFilling->isChecked());
-			ui->listWidget->addItem(QString("Polygon %1").arg(ui->listWidget->count() + 1));
+	if (e->button() == Qt::LeftButton && ui->toolButtonDrawPolygon->isChecked() && !ui->pushButtonMove->isChecked()) {
+		if (!polygonActive) {
+			int layerIndex = ui->listWidget->count();
+			ui->listWidget->addItem(QString("Polygon %1").arg(layerIndex + 1));
 			int newRowIndex = ui->listWidget->count() - 1;
 			ui->listWidget->setCurrentRow(newRowIndex);
+
+			polygon = new MyPolygon(QVector<QPoint>(), layerIndex, ui->checkBoxFilling->isChecked(), borderColor, fillingColor);
+			polygonActive = true;
 		}
 
 		w->setPixel(e->pos().x(), e->pos().y(), borderColor);
@@ -131,20 +136,22 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 		w->update();
 	}
 	if (e->button() == Qt::RightButton && ui->toolButtonDrawPolygon->isChecked()) {
-		if (polygon) {
-			w->drawShape(*polygon);
-			delete polygon;
-			polygon = nullptr;
+		if (polygonActive) {
+			w->drawPolygon(*polygon);
+			vW->addToZBuffer(*polygon, polygon->getZBufferPosition());
+			polygonActive = false;
 		}
-		ui->toolButtonDrawPolygon->setDisabled(true);
 	}
 	//	>> Curve Drawing
-	if (e->button() == Qt::LeftButton && ui->toolButtonDrawCurve->isChecked() && !curveDone) {
-		if (!curve) {
-			curve = new BezierCurve(QVector<QPoint>(), ui->listWidget->count() + 1, ui->checkBoxFilling->isChecked());
+	if (e->button() == Qt::LeftButton && ui->toolButtonDrawCurve->isChecked() && !ui->pushButtonMove->isChecked()) {
+		if (!curveActive) {
+			int layerIndex = ui->listWidget->count();
 			ui->listWidget->addItem(QString("Bezier Curve %1").arg(ui->listWidget->count() + 1));
 			int newRowIndex = ui->listWidget->count() - 1;
 			ui->listWidget->setCurrentRow(newRowIndex);
+
+			curve = new BezierCurve(QVector<QPoint>(), ui->listWidget->count(), ui->checkBoxFilling->isChecked(), borderColor, fillingColor);
+			curveActive = true;
 		}
 
 		curve->addPoint(e->pos());
@@ -152,13 +159,39 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 		w->update();
 	}
 	if (e->button() == Qt::RightButton && ui->toolButtonDrawCurve->isChecked()) {
-		if (curve) {
-			w->drawShape(*curve);
-			delete curve;
-			curve = nullptr;
+		if (curveActive) {
+			w->drawCurve(*curve);
+			vW->addToZBuffer(*curve, curve->getZBufferPosition());
+			curveActive = false;
 		}
-		ui->toolButtonDrawCurve->setDisabled(true);
-		curveDone = true;
+	}
+
+	//	>> Rectangle Drawing
+	if (e->button() == Qt::LeftButton && ui->toolButtonDrawRectangle->isChecked() && !ui->pushButtonMove->isChecked())
+	{
+		if (w->getDrawRectangleActivated()) {
+			int layerIndex = ui->listWidget->count();
+			ui->listWidget->addItem(QString("Rectangle %1").arg(layerIndex + 1));
+			int newRowIndex = ui->listWidget->count() - 1;
+			ui->listWidget->setCurrentRow(newRowIndex);
+			
+			if ((e->pos().y() > w->getDrawRectangleBegin().y() && e->pos().x() > w->getDrawRectangleBegin().x()) || (e->pos().y() < w->getDrawRectangleBegin().y() && w->getDrawRectangleBegin().x() > e->pos().x())) {
+				rectangle = new MyRectangle(w->getDrawRectangleBegin(), QPoint(e->pos().x(), w->getDrawRectangleBegin().y()), e->pos(), QPoint(w->getDrawRectangleBegin().x(), e->pos().y()), layerIndex, ui->checkBoxFilling->isChecked(), borderColor, fillingColor);
+			}
+			else {
+				rectangle = new MyRectangle(w->getDrawRectangleBegin(), QPoint(w->getDrawRectangleBegin().x(), e->pos().y()), e->pos(), QPoint(e->pos().x(), w->getDrawRectangleBegin().y()), layerIndex, ui->checkBoxFilling->isChecked(), borderColor, fillingColor);
+			}
+
+			w->drawRectangle(*rectangle);
+			vW->addToZBuffer(*rectangle, rectangle->getZBufferPosition());
+			w->setDrawRectangleActivated(false);
+		}
+		else {
+			w->setDrawRectangleBegin(e->pos());
+			w->setDrawRectangleActivated(true);
+			w->setPixel(e->pos().x(), e->pos().y(), borderColor);
+			w->update();
+		}
 	}
 }
 void ImageViewer::ViewerWidgetMouseButtonRelease(ViewerWidget* w, QEvent* event)
@@ -224,6 +257,20 @@ void ImageViewer::ViewerWidgetMouseMove(ViewerWidget* w, QEvent* event)
 			w->setMoveStart(QPoint());
 		}
 	}
+
+	//	>> Rectangle Movement
+	if (ui->toolButtonDrawRectangle->isChecked()) {
+		if (e->buttons() & Qt::LeftButton && ui->pushButtonMove->isChecked()) {
+			QPoint offset = e->pos() - w->getMoveStart();
+			if (!w->getMoveStart().isNull()) {
+				w->moveRectangle(offset);
+			}
+			w->setMoveStart(e->pos());
+		}
+		else if (ui->pushButtonMove->isChecked()) {
+			w->setMoveStart(QPoint());
+		}
+	}
 }
 void ImageViewer::ViewerWidgetLeave(ViewerWidget* w, QEvent* event)
 {
@@ -255,6 +302,9 @@ void ImageViewer::ViewerWidgetWheel(ViewerWidget* w, QEvent* event)
 		}
 		if (ui->toolButtonDrawCircle->isChecked()) {
 			w->scaleCircle(scale, scale);
+		}
+		if (ui->toolButtonDrawRectangle->isChecked()) {
+			w->scaleRectangle(scale, scale);
 		}
 	}
 }
@@ -322,11 +372,6 @@ void ImageViewer::on_actionSave_as_triggered()
 
 void ImageViewer::on_actionClear_triggered()
 {
-	polygonDone = false;
-	lineDone = false;
-	curveDone = false;
-	circleDone = false;
-	rectangleDone = false;
 	objectLoaded = false;
 
 	ui->toolButtonDrawPolygon->setDisabled(false);
@@ -339,6 +384,9 @@ void ImageViewer::on_actionClear_triggered()
 	ui->pushButtonMove->setChecked(false);
 	ui->checkBoxScale->setChecked(false);
 	ui->checkBoxFilling->setChecked(false);
+	ui->listWidget->clear();
+
+	vW->clearZBuffer();
 	vW->clear();
 }
 
@@ -369,6 +417,11 @@ void ImageViewer::on_pushButtonSetBorderColor_clicked()
 	vW->setBorderColor(borderColor);
 }
 
+void ImageViewer::on_pushButtonChangeLayerColor_clicked() {
+	vW->changeLayerColor(ui->listWidget->currentRow(), borderColor, fillingColor);
+	vW->redrawAllShapes();
+}
+
 void ImageViewer::on_pushButtonTurn_clicked() {
 	if (ui->toolButtonDrawPolygon->isChecked()) {
 		vW->turnPolygon(ui->spinBoxTurn->value());
@@ -378,6 +431,9 @@ void ImageViewer::on_pushButtonTurn_clicked() {
 	}
 	if (ui->toolButtonDrawCurve->isChecked()) {
 		vW->turnCurve(ui->spinBoxTurn->value());
+	}
+	if (ui->toolButtonDrawRectangle->isChecked()) {
+		vW->turnRectangle(ui->spinBoxTurn->value());
 	}
 }
 
@@ -394,4 +450,75 @@ void ImageViewer::on_pushButtonScale_clicked() {
 	if (ui->toolButtonDrawCircle->isChecked()) {
 		vW->scaleCircle(ui->doubleSpinBoxScaleX->value(), ui->doubleSpinBoxScaleY->value());
 	}
+	if (ui->toolButtonDrawRectangle->isChecked()) {
+		vW->scaleRectangle(ui->doubleSpinBoxScaleX->value(), ui->doubleSpinBoxScaleY->value());
+	}
+}
+
+void ImageViewer::on_pushButtonLayerUp_clicked() {
+	int currentRow = ui->listWidget->currentRow();
+
+	if (currentRow > 0) {
+		vW->moveShapeUp(currentRow);
+		int newRowIndex = currentRow - 1;
+
+		QListWidgetItem* currentItem = ui->listWidget->takeItem(currentRow);
+		QListWidgetItem* aboveItem = ui->listWidget->takeItem(newRowIndex);
+
+		ui->listWidget->insertItem(currentRow, aboveItem);
+		ui->listWidget->insertItem(newRowIndex, currentItem);
+
+		ui->listWidget->setCurrentRow(newRowIndex);
+	}
+	else {
+		QMessageBox::warning(this, "Invalid Depth", "Dosiahli ste maximalnu hlbku pre Z-Buffer.");
+	}
+}
+
+void ImageViewer::on_pushButtonLayerDown_clicked() {
+	int currentRow = ui->listWidget->currentRow();
+
+	if (currentRow < 0) {
+		QMessageBox::warning(this, "No Selection", "Vrstva pre posunutie neexistuje");
+		return;
+	}
+
+	int newRowIndex = currentRow + 1;
+
+	if (newRowIndex < ui->listWidget->count()) {
+		vW->moveShapeDown(currentRow);
+
+		QListWidgetItem* currentItem = ui->listWidget->takeItem(currentRow);
+		QListWidgetItem* belowItem = ui->listWidget->takeItem(newRowIndex);
+
+		ui->listWidget->insertItem(currentRow, belowItem);
+		ui->listWidget->insertItem(newRowIndex, currentItem);
+
+		ui->listWidget->setCurrentRow(newRowIndex);
+
+		vW->redrawAllShapes();
+	}
+	else {
+		QMessageBox::warning(this, "Invalid Depth", "You have reached the minimum depth for Z-Buffer.");
+	}
+}
+
+void ImageViewer::on_pushButtonDeleteObject_clicked() {
+	int currentRow = ui->listWidget->currentRow();
+
+	if (currentRow < 0) {
+		QMessageBox::warning(this, "No Selection", "Neexistuje vrstva na vymazanie");
+		return;
+	}
+
+	vW->deleteObjectFromZBuffer(currentRow);
+
+	QListWidgetItem* item = ui->listWidget->takeItem(currentRow);
+	delete item;
+
+	vW->redrawAllShapes();
+}
+
+void ImageViewer::on_pushButtonSaveImage_clicked() {
+
 }

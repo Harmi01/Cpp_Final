@@ -22,8 +22,10 @@ private:
 	bool drawLineActivated = false;
 	bool drawCircleActivated = false;
 	bool drawPolygonActivated = false;
+	bool drawRectangleActivated = false;
 	QPoint drawLineBegin = QPoint(0, 0);
 	QPoint drawCircleCenter = QPoint(0, 0);
+	QPoint drawRectangleBegin = QPoint(0, 0);
 	QPoint moveStart = QPoint(0, 0);
 	QVector<QPoint> originalPointsVector;
 
@@ -42,6 +44,7 @@ public:
 	QPainter* getPainter() { return painter; }
 	bool isEmpty();
 	bool changeSize(int width, int height);
+	void changeLayerColor(int zBufferPosition, const QColor& newBorderColor, const QColor& newFillingColor);
 
 	void setPixel(int x, int y, uchar r, uchar g, uchar b, uchar a = 255);
 	void setPixel(int x, int y, double valR, double valG, double valB, double valA = 1.);
@@ -65,7 +68,7 @@ public:
 	void drawLineBresenham(QVector<QPoint>& linePoints);
 	void moveLine(const QPoint& offset);
 	void turnLine(int angle);
-	QPoint getLineCenter(const Line& line) const;
+	QPoint getLineCenter(Line& line) const;
 	void scaleLine(double scaleX, double scaleY);
 	
 	//	Circles
@@ -85,11 +88,11 @@ public:
 	QPoint getMoveStart() { return moveStart; }
 	void movePolygon(const QPoint& offset);
 	void turnPolygon(int angle);
-	QPoint getPolygonCenter(const MyPolygon& polygon) const;
+	QPoint getPolygonCenter(Shape& polygon) const;
 	void scalePolygon(double scaleX, double scaleY);
 	
 	//  **Trimming functions**
-	QVector<QPoint> trimPolygon(const MyPolygon& polygon);
+	QVector<QPoint> trimPolygon(Shape& polygon);
 	void clipLineWithPolygon(QVector<QPoint> linePoints);
 
 	//	**Polygon filling handling**
@@ -157,7 +160,7 @@ public:
 	static bool compareByY(const Edge& edge1, const Edge& edge2){ return edge1.startPoint().y() < edge2.startPoint().y(); }
 	static bool compareByX(const Edge& edge1, const Edge& edge2){ return edge1.x() < edge2.x(); }
 	
-	void fillPolygon(const MyPolygon& polygon);
+	void fillPolygon(Shape& polygon);
 	QVector<Edge> loadEdges(const QVector<QPoint>& points);
 
 	//	** Curve function declarations **
@@ -165,7 +168,13 @@ public:
 	void moveCurve(const QPoint& offset);
 	void scaleCurve(double scaleX, double scaleY);
 	void turnCurve(int angle);
-	QPoint calculateCurveCenter(const BezierCurve& curve) const;
+	QPoint calculateCurveCenter(BezierCurve& curve) const;
+
+	//	Rectangles
+	void drawRectangle(MyRectangle& rectangle);
+	void moveRectangle(const QPoint& offset);
+	void scaleRectangle(double scaleX, double scaleY);
+	void turnRectangle(int angle);
 
 	//Get/Set functions
 	uchar* getData() { return data; }
@@ -175,10 +184,17 @@ public:
 	void setFillingColor(QColor filling) { fillingColor = filling; }
 	void setLayer(int layer) { currentLayer = layer; }
 
+	void setDrawRectangleActivated(bool state) { drawRectangleActivated = state; }
+	bool getDrawRectangleActivated() { return drawRectangleActivated; }
+	void setDrawRectangleBegin(QPoint begin) { drawRectangleBegin = begin; }
+	QPoint getDrawRectangleBegin() { return drawRectangleBegin; }
+
 	int getImgWidth() { return img->width(); };
 	int getImgHeight() { return img->height(); };
 
+	void clearZBuffer() { zBuffer.clear(); }
 	void clear();
+	void deleteObjectFromZBuffer(int currentIndex);
 
 public slots:
 	void paintEvent(QPaintEvent* event) Q_DECL_OVERRIDE;
