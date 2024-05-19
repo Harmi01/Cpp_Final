@@ -57,6 +57,7 @@ private slots:
 	void on_actionExit_triggered();
 	void layerSelectionChanged(int currentRow);
 	void on_pushButtonSaveImage_clicked();
+	void on_pushButtonLoadImage_clicked();
 
 //-----------------------------------------
 //		*** Tools 2D slots ***

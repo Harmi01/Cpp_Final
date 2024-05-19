@@ -255,6 +255,63 @@ void ViewerWidget::redrawAllShapes() {
 	update();
 }
 
+void ViewerWidget::saveCurrentImageState() {
+	QString filePath = QFileDialog::getSaveFileName(this, "Save Image State", "C:\\Pocitacova_grafika_projects\\ImageViewer_projekt_zaverecny", "CSV Files (*.csv)");
+	if (filePath.isEmpty()) {
+		return;
+	}
+
+	QFile file(filePath);
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+		QMessageBox::warning(this, "File Error", "Unable to open file for writing.");
+		return;
+	}
+
+	QTextStream out(&file);
+
+	out << "ShapeType,ZBufferPosition,IsFilled,BorderColor,FillingColor,Points\n";
+
+	for (const auto& pair : zBuffer) {
+		Shape& shape = pair.first.get();
+		int zBufferPosition = pair.second;
+		QString shapeType;
+		switch (shape.getType()) {
+		case Shape::LINE:
+			shapeType = "Line";
+			break;
+		case Shape::RECTANGLE:
+			shapeType = "Rectangle";
+			break;
+		case Shape::POLYGON:
+			shapeType = "Polygon";
+			break;
+		case Shape::CIRCLE:
+			shapeType = "Circle";
+			break;
+		case Shape::BEZIER_CURVE:
+			shapeType = "BezierCurve";
+			break;
+		}
+
+		QString borderColor = shape.getBorderColor().name();
+		QString fillingColor = shape.getFillingColor().name();
+		QString isFilled = shape.getIsFilled() ? "true" : "false";
+
+		QString points;
+		QVector<QPoint> shapePoints = shape.getPoints();
+		for (const QPoint& point : shapePoints) {
+			points += QString("(%1,%2) ").arg(point.x()).arg(point.y());
+		}
+		points = points.trimmed();
+
+		out << shapeType << "," << zBufferPosition << "," << isFilled << "," << borderColor << "," << fillingColor << "," << points << "\n";
+	}
+
+	file.close();
+
+	QMessageBox::information(this, "Save Successful", "The current state has been saved successfully.");
+}
+
 //-----------------------------------------
 //		*** Line functions ***
 //-----------------------------------------

@@ -321,7 +321,7 @@
            <item row="6" column="1" colspan="2">
             <widget class="QPushButton" name="pushButtonSaveImage">
              <property name="text">
-              <string>Save</string>
+              <string>Save State</string>
              </property>
             </widget>
            </item>
@@ -346,9 +346,9 @@
             </spacer>
            </item>
            <item row="7" column="1" colspan="2">
-            <widget class="QPushButton" name="pushButtonLoadVTK">
+            <widget class="QPushButton" name="pushButtonLoadImage">
              <property name="text">
-              <string>Load VTK</string>
+              <string>Load State</string>
              </property>
             </widget>
            </item>

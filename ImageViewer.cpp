@@ -98,7 +98,7 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 	}
 
 	//	>> Circle Drawing
-	if (e->button() == Qt::LeftButton && ui->toolButtonDrawCircle->isChecked())
+	if (e->button() == Qt::LeftButton && ui->toolButtonDrawCircle->isChecked() && !ui->pushButtonMove->isChecked())
 	{
 		if (w->getDrawCircleActivated()) {
 			int layerIndex = ui->listWidget->count();
@@ -520,5 +520,85 @@ void ImageViewer::on_pushButtonDeleteObject_clicked() {
 }
 
 void ImageViewer::on_pushButtonSaveImage_clicked() {
+	vW->saveCurrentImageState();
+}
 
+void ImageViewer::on_pushButtonLoadImage_clicked() {
+	QString filePath = QFileDialog::getOpenFileName(this, "Load Image State", "C:\\Pocitacova_grafika_projects\\ImageViewer_projekt_zaverecny", "CSV Files (*.csv)");
+	if (filePath.isEmpty()) {
+		return;
+	}
+
+	QFile file(filePath);
+	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		QMessageBox::warning(this, "File Error", "Unable to open file for reading.");
+		return;
+	}
+
+	vW->clearZBuffer();
+	ui->listWidget->clear();
+
+	QTextStream in(&file);
+
+	in.readLine();
+
+	while (!in.atEnd()) {
+		QString line = in.readLine();
+		QStringList fields = line.split(',');
+
+		if (fields.size() < 6) {
+			QMessageBox::warning(this, "File Error", "Invalid file format.");
+			return;
+		}
+
+		QString shapeType = fields[0];
+		int zBufferPosition = fields[1].toInt();
+		bool isFilled = (fields[2] == "true");
+		QColor borderColor(fields[3]);
+		QColor fillingColor(fields[4]);
+
+		QVector<QPoint> points;
+		QString pointsStr = fields.mid(5).join(",");
+		QStringList pointPairs = pointsStr.split(' ', Qt::SkipEmptyParts);
+		for (const QString& pair : pointPairs) {
+			QString cleanPair = pair.trimmed().remove('(').remove(')');
+			QStringList coords = cleanPair.split(',');
+			if (coords.size() == 2) {
+				int x = coords[0].toInt();
+				int y = coords[1].toInt();
+				points.append(QPoint(x, y));
+			}
+		}
+
+		Shape* shape = nullptr;
+		if (shapeType == "Line" && points.size() == 2) {
+			shape = new Line(points[0], points[1], zBufferPosition, isFilled, borderColor, fillingColor);
+		}
+		else if (shapeType == "Rectangle" && points.size() == 4) {
+			shape = new MyRectangle(points[0], points[1], points[2], points[3], zBufferPosition, isFilled, borderColor, fillingColor);
+		}
+		else if (shapeType == "Polygon" && points.size() >= 3) {
+			shape = new MyPolygon(points, zBufferPosition, isFilled, borderColor, fillingColor);
+		}
+		else if (shapeType == "Circle" && points.size() == 2) {
+			shape = new Circle(points[0], points[1], zBufferPosition, isFilled, borderColor, fillingColor);
+		}
+		else if (shapeType == "BezierCurve" && points.size() >= 3) {
+			shape = new BezierCurve(points, zBufferPosition, isFilled, borderColor, fillingColor);
+		}
+		else {
+			QMessageBox::warning(this, "File Error", "Invalid shape type or points in file.");
+			continue;
+		}
+
+		if (shape != nullptr) {
+			vW->addToZBuffer(*shape, zBufferPosition);
+			ui->listWidget->addItem(shapeType + " " + QString::number(zBufferPosition + 1));
+		}
+	}
+
+	file.close();
+	vW->redrawAllShapes();
+
+	QMessageBox::information(this, "Load Successful", "The saved state has been loaded successfully.");
 }

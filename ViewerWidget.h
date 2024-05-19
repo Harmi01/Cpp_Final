@@ -195,6 +195,7 @@ public:
 	void clearZBuffer() { zBuffer.clear(); }
 	void clear();
 	void deleteObjectFromZBuffer(int currentIndex);
+	void saveCurrentImageState();
 
 public slots:
 	void paintEvent(QPaintEvent* event) Q_DECL_OVERRIDE;
